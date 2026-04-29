@@ -744,7 +744,7 @@
     const url = photos[selectedPhoto];
     const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     $('print-img').src = url;
-    $('print-date').innerHTML = 'Haus Eber Photo Booth' + date + '<br> powered by Willimann/Arai';
+    $('print-date').innerHTML = 'Haus Eber Photo Booth - ' + date + '<br> powered by Willimann/Arai';
     show('printing');
 
     setTimeout(() => {
