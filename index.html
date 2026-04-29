@@ -390,6 +390,32 @@
   }
 
   canvas { display: none; }
+
+  /* ── PRINT STYLES ── */
+  @media print {
+    body { background: #fff !important; overflow: visible !important; }
+    body::before, body::after { display: none !important; }
+    #app { display: block !important; width: auto !important; height: auto !important; }
+    #welcome, #camera, #review { display: none !important; }
+    #printing {
+      display: flex !important;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 0 !important;
+      background: #fff !important;
+    }
+    .printing-frame {
+      width: 280px !important;
+      box-shadow: none !important;
+      animation: none !important;
+      border: 1px solid #ddd;
+    }
+    .printing-msg, #done-btn { display: none !important; }
+    .printing-caption { color: #5a3a1a !important; }
+    @page { margin: 1.5cm; }
+  }
 </style>
 </head>
 <body>
@@ -454,7 +480,7 @@
   <div class="screen" id="printing">
     <div class="printing-frame" id="print-frame">
       <img id="print-img" src="" alt="Your photo">
-      <div class="printing-caption">PHOTO BOOTH</div>
+      <div class="printing-caption" id="print-date">PHOTO BOOTH</div>
     </div>
     <div class="printing-msg" id="printing-msg">Printing...</div>
     <button class="done-btn" id="done-btn" style="display:none">Take Another</button>
@@ -606,35 +632,16 @@
   function printPhoto() {
     if(selectedPhoto === null) return;
     const url = photos[selectedPhoto];
+    const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     $('print-img').src = url;
+    $('print-date').textContent = 'Photo Booth · ' + date;
     show('printing');
 
-    const printWin = window.open('', '_blank');
-    if(printWin) {
-      const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-      printWin.document.write(`<!DOCTYPE html>
-<html><head><style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .pf { background: #f5e6c8; padding: 16px 16px 56px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); width: 320px; }
-  img { display: block; width: 100%; }
-  p { font-family: Georgia, serif; font-size: 11px; color: #5a3a1a; text-align: center; padding-top: 10px; letter-spacing: 0.2em; text-transform: uppercase; }
-  @media print { body { margin: 0; } @page { margin: 1cm; } }
-</style></head><body>
-  <div class="pf">
-    <img src="${url}">
-    <p>Photo Booth &nbsp;·&nbsp; ${date}</p>
-  </div>
-  <script>window.onload = () => { setTimeout(() => { window.print(); window.close(); }, 400); }<\/script>
-</body></html>`);
-      printWin.document.close();
-    }
-
-    $('printing-msg').textContent = 'Printing...';
     setTimeout(() => {
+      window.print();
       $('printing-msg').textContent = 'Done!';
       $('done-btn').style.display = 'block';
-    }, 3000);
+    }, 800);
   }
 </script>
 </body>
