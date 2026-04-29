@@ -128,12 +128,51 @@
   }
 
   #video {
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scaleX(-1);
+    width: 100%; height: 100%;
     object-fit: cover;
-    transform: scaleX(-1);
     filter: sepia(40%) saturate(80%) brightness(0.95);
   }
+
+  /* 4:3 crop frame — masks everything outside the capture area */
+  #crop-mask-top, #crop-mask-bottom {
+    position: absolute; left: 0; right: 0;
+    background: rgba(10,5,0,0.82);
+    pointer-events: none;
+    z-index: 3;
+  }
+  #crop-frame {
+    position: absolute; left: 0; right: 0;
+    pointer-events: none;
+    z-index: 4;
+    border-left: 2px solid rgba(245,230,200,0.25);
+    border-right: 2px solid rgba(245,230,200,0.25);
+  }
+  #crop-frame::before, #crop-frame::after {
+    content: '';
+    position: absolute;
+    width: 28px; height: 28px;
+    border-color: rgba(245,230,200,0.7);
+    border-style: solid;
+  }
+  #crop-frame::before { top: 0; left: 0; border-width: 2px 0 0 2px; }
+  #crop-frame::after  { top: 0; right: 0; border-width: 2px 2px 0 0; }
+  #crop-frame-bottom-corners {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 4;
+  }
+  #crop-frame-bottom-corners::before, #crop-frame-bottom-corners::after {
+    content: '';
+    position: absolute;
+    width: 28px; height: 28px;
+    border-color: rgba(245,230,200,0.7);
+    border-style: solid;
+  }
+  #crop-frame-bottom-corners::before { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+  #crop-frame-bottom-corners::after  { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
 
   #camera-overlay {
     position: absolute; inset: 0;
@@ -141,12 +180,14 @@
       0deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px
     );
     pointer-events: none;
+    z-index: 2;
   }
 
   #camera-vignette {
     position: absolute; inset: 0;
     background: radial-gradient(ellipse at center, transparent 55%, rgba(20,10,0,0.75) 100%);
     pointer-events: none;
+    z-index: 2;
   }
 
   #flash-overlay {
@@ -393,6 +434,7 @@
 
   /* ── PRINT STYLES ── */
   @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     body { background: #fff !important; overflow: visible !important; }
     body::before, body::after { display: none !important; }
     #app { display: block !important; width: auto !important; height: auto !important; }
@@ -402,19 +444,42 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
+      width: 100%;
+      height: 100vh;
       gap: 0 !important;
       background: #fff !important;
+      page-break-inside: avoid;
     }
     .printing-frame {
-      width: 280px !important;
+      width: auto !important;
+      max-width: 160mm !important;
+      height: auto !important;
+      max-height: 140mm !important;
       box-shadow: none !important;
       animation: none !important;
-      border: 1px solid #ddd;
+      border: 1px solid #ccc !important;
+      padding: 8mm 8mm 22mm !important;
+      background: #f5e6c8 !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .printing-frame img {
+      width: 100% !important;
+      height: auto !important;
+      max-height: 100mm !important;
+      object-fit: contain !important;
+      display: block !important;
     }
     .printing-msg, #done-btn { display: none !important; }
-    .printing-caption { color: #5a3a1a !important; }
-    @page { margin: 1.5cm; }
+    .printing-caption {
+      color: #5a3a1a !important;
+      font-size: 9pt !important;
+      padding-top: 4mm !important;
+    }
+    @page {
+      size: A4 portrait;
+      margin: 15mm;
+    }
   }
 </style>
 </head>
@@ -444,6 +509,10 @@
   <div class="screen" id="camera">
     <div id="camera-wrapper">
       <video id="video" autoplay playsinline muted></video>
+      <div id="crop-mask-top"></div>
+      <div id="crop-mask-bottom"></div>
+      <div id="crop-frame"></div>
+      <div id="crop-frame-bottom-corners"></div>
       <div id="camera-overlay"></div>
       <div id="camera-vignette"></div>
       <div id="flash-overlay"></div>
@@ -520,6 +589,8 @@
       resetDots();
       resetMinis();
       show('camera');
+      updateCropFrame();
+      window.addEventListener('resize', updateCropFrame);
       setTimeout(() => runSequence(), 1000);
     } catch(e) {
       alert('Camera access is needed for the photo booth.\n\nPlease allow camera access in Safari Settings and try again.');
@@ -565,6 +636,24 @@
 
   function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  function updateCropFrame() {
+    const wrapper = document.getElementById('camera-wrapper');
+    const W = wrapper.clientWidth;
+    const H = wrapper.clientHeight;
+    const cropH = W * (3 / 4);
+    const topOffset = (H - cropH) / 2;
+
+    const maskTop = document.getElementById('crop-mask-top');
+    const maskBot = document.getElementById('crop-mask-bottom');
+    const frame   = document.getElementById('crop-frame');
+    const frameBC = document.getElementById('crop-frame-bottom-corners');
+
+    maskTop.style.cssText = `top:0; height:${topOffset}px;`;
+    maskBot.style.cssText = `bottom:0; height:${topOffset}px;`;
+    frame.style.cssText   = `top:${topOffset}px; height:${cropH}px;`;
+    frameBC.style.cssText = `top:${topOffset}px; height:${cropH}px;`;
+  }
+
   async function snap(idx) {
     const flash = $('flash-overlay');
     flash.style.opacity = '1';
@@ -572,12 +661,32 @@
 
     const video = $('video');
     const canvas = $('capture-canvas');
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
+
+    const vW = video.videoWidth || 1280;
+    const vH = video.videoHeight || 720;
+
+    // Compute the 4:3 crop in video-pixel space
+    const targetAspect = 4 / 3;
+    let srcX, srcY, srcW, srcH;
+    if (vW / vH > targetAspect) {
+      srcH = vH;
+      srcW = vH * targetAspect;
+      srcX = (vW - srcW) / 2;
+      srcY = 0;
+    } else {
+      srcW = vW;
+      srcH = vW / targetAspect;
+      srcX = 0;
+      srcY = (vH - srcH) / 2;
+    }
+
+    const outW = 1200, outH = 900;
+    canvas.width = outW;
+    canvas.height = outH;
     const ctx = canvas.getContext('2d');
     ctx.save();
     ctx.scale(-1, 1);
-    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, srcX, srcY, srcW, srcH, -outW, 0, outW, outH);
     ctx.restore();
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     photos.push(dataUrl);
