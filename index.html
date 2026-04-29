@@ -404,6 +404,7 @@
     text-align: center;
     padding-top: 6px;
     letter-spacing: 0.2em;
+    line-height: 1.6;
   }
 
   .printing-msg {
@@ -743,7 +744,7 @@
     const url = photos[selectedPhoto];
     const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     $('print-img').src = url;
-    $('print-date').textContent = 'Photo Booth · ' + date;
+    $('print-date').innerHTML = 'Haus Eber Photo Booth' + date + '<br> powered by Willimann/Arai';
     show('printing');
 
     setTimeout(() => {
