@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Photo Booth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Playfair+Display:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #1a0f00;
+    font-family: 'Special Elite', cursive;
+    min-height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 99;
+  }
+
+  #app {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; }
+  .screen.active { display: flex; }
+
+  /* ── WELCOME ── */
+  #welcome { gap: 2rem; padding: 2rem; }
+
+  .booth-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    color: #f5e6c8;
+    text-align: center;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 40px rgba(245,180,60,0.4);
+    line-height: 1.1;
+  }
+  .booth-subtitle {
+    font-family: 'VT323', monospace;
+    font-size: clamp(1rem, 2.5vw, 1.5rem);
+    color: #c8a87a;
+    text-align: center;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  .film-strip-deco {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .film-hole {
+    width: 14px; height: 14px;
+    background: #1a0f00;
+    border: 2px solid #5a3a1a;
+    border-radius: 2px;
+  }
+  .film-segment {
+    width: 60px; height: 44px;
+    background: #2a1a00;
+    border: 1.5px solid #5a3a1a;
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    color: #5a3a1a;
+    font-size: 0.6rem;
+  }
+
+  .big-btn {
+    background: #c8860a;
+    color: #1a0800;
+    border: none;
+    font-family: 'Special Elite', cursive;
+    font-size: clamp(1.2rem, 3vw, 1.8rem);
+    padding: 1rem 3.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    box-shadow: inset 0 -4px 0 rgba(0,0,0,0.35), 0 4px 20px rgba(200,134,10,0.4);
+    transition: transform 0.1s, box-shadow 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .big-btn:active {
+    transform: translateY(2px);
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,0.35), 0 2px 10px rgba(200,134,10,0.4);
+  }
+
+  /* ── CAMERA ── */
+  #camera { position: relative; gap: 0; padding: 0; }
+
+  #camera-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    filter: sepia(40%) saturate(80%) brightness(0.95);
+  }
+
+  #camera-overlay {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px
+    );
+    pointer-events: none;
+  }
+
+  #camera-vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(20,10,0,0.75) 100%);
+    pointer-events: none;
+  }
+
+  #flash-overlay {
+    position: absolute; inset: 0;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.05s;
+    z-index: 10;
+  }
+
+  #hud {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    background: linear-gradient(transparent, rgba(20,10,0,0.9) 50%);
+    z-index: 5;
+  }
+
+  #photo-dots { display: flex; gap: 12px; }
+
+  .dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid #c8a87a;
+    background: transparent;
+    transition: background 0.3s;
+  }
+  .dot.taken { background: #c8860a; border-color: #c8860a; }
+  .dot.next { border-color: #f5e6c8; animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(245,230,200,0.6); }
+    50% { box-shadow: 0 0 0 6px rgba(245,230,200,0); }
+  }
+
+  #countdown-display {
+    font-family: 'VT323', monospace;
+    font-size: clamp(3rem, 8vw, 6rem);
+    color: #f5e6c8;
+    line-height: 1;
+    text-shadow: 0 0 20px rgba(245,230,200,0.5);
+    min-height: 1.2em;
+  }
+
+  #status-text {
+    font-family: 'Special Elite', cursive;
+    font-size: clamp(0.8rem, 2vw, 1rem);
+    color: #c8a87a;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  #photo-strip-preview {
+    position: absolute;
+    top: 1rem; right: 1rem;
+    display: flex; flex-direction: column;
+    gap: 4px;
+    z-index: 5;
+  }
+
+  .mini-photo {
+    width: 60px; height: 48px;
+    background: #2a1a00;
+    border: 2px solid #5a3a1a;
+    border-radius: 2px;
+    overflow: hidden;
+    opacity: 0.4;
+    transition: opacity 0.4s;
+  }
+  .mini-photo.taken { opacity: 1; border-color: #c8860a; }
+  .mini-photo img { width: 100%; height: 100%; object-fit: cover; filter: sepia(60%) saturate(70%); transform: scaleX(-1); }
+
+  /* ── REVIEW ── */
+  #review {
+    padding: 1.5rem;
+    gap: 1.5rem;
+    background: #0f0800;
+  }
+
+  .review-title {
+    font-family: 'VT323', monospace;
+    font-size: clamp(1.2rem, 3vw, 1.8rem);
+    color: #c8a87a;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  #photo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    width: 100%;
+    max-width: 700px;
+  }
+
+  .photo-card {
+    position: relative;
+    aspect-ratio: 4/3;
+    border: 3px solid #3a2a10;
+    border-radius: 3px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .photo-card:active { transform: scale(0.97); }
+  .photo-card.selected {
+    border-color: #c8860a;
+    box-shadow: 0 0 0 2px #c8860a, 0 0 20px rgba(200,134,10,0.4);
+  }
+  .photo-card img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: sepia(50%) saturate(75%) contrast(1.05);
+    transform: scaleX(-1);
+  }
+  .photo-card .grain {
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.1'/%3E%3C/svg%3E");
+    opacity: 0.35;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+  .photo-card .select-badge {
+    position: absolute; bottom: 6px; right: 6px;
+    background: rgba(20,10,0,0.7);
+    border: 1.5px solid #c8a87a;
+    color: #c8a87a;
+    font-family: 'Special Elite', cursive;
+    font-size: 0.65rem;
+    padding: 3px 7px;
+    border-radius: 2px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: background 0.2s, color 0.2s;
+  }
+  .photo-card.selected .select-badge {
+    background: #c8860a;
+    border-color: #c8860a;
+    color: #1a0800;
+  }
+  .photo-number {
+    position: absolute; top: 6px; left: 8px;
+    font-family: 'VT323', monospace;
+    font-size: 1rem;
+    color: rgba(245,230,200,0.6);
+  }
+
+  .review-actions {
+    display: flex; gap: 1rem;
+    width: 100%; max-width: 700px;
+  }
+
+  .action-btn {
+    flex: 1;
+    padding: 0.8rem 1rem;
+    border-radius: 3px;
+    font-family: 'Special Elite', cursive;
+    font-size: clamp(0.85rem, 2vw, 1rem);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.1s, opacity 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .action-btn:active { transform: scale(0.97); }
+  .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-print {
+    background: #c8860a;
+    color: #1a0800;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3), 0 3px 15px rgba(200,134,10,0.35);
+  }
+  .btn-discard {
+    background: transparent;
+    color: #c8a87a;
+    border: 1.5px solid #5a3a1a;
+  }
+  .btn-discard:hover { border-color: #c8a87a; }
+
+  /* ── PRINTING ── */
+  #printing { gap: 2rem; text-align: center; }
+
+  .printing-frame {
+    width: 200px;
+    background: #f5e6c8;
+    padding: 12px 12px 40px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    border-radius: 2px;
+    animation: eject 1.5s ease-out 0.5s both;
+  }
+  @keyframes eject {
+    from { transform: translateY(-30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .printing-frame img {
+    width: 100%; aspect-ratio: 4/3; object-fit: cover;
+    filter: sepia(50%) saturate(75%);
+    display: block;
+    transform: scaleX(-1);
+  }
+  .printing-caption {
+    font-family: 'VT323', monospace;
+    font-size: 0.8rem;
+    color: #5a3a1a;
+    text-align: center;
+    padding-top: 6px;
+    letter-spacing: 0.2em;
+  }
+
+  .printing-msg {
+    font-family: 'VT323', monospace;
+    font-size: clamp(1.2rem, 3vw, 1.8rem);
+    color: #c8a87a;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .done-btn {
+    background: transparent;
+    color: #c8a87a;
+    border: 1.5px solid #5a3a1a;
+    font-family: 'Special Elite', cursive;
+    font-size: clamp(0.85rem, 2vw, 1rem);
+    padding: 0.7rem 2.5rem;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  canvas { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- WELCOME -->
+  <div class="screen active" id="welcome">
+    <div class="film-strip-deco">
+      <div class="film-hole"></div><div class="film-segment"></div>
+      <div class="film-hole"></div><div class="film-segment"></div>
+      <div class="film-hole"></div><div class="film-segment"></div>
+      <div class="film-hole"></div>
+    </div>
+    <div class="booth-title">Photo<br>Booth</div>
+    <div class="booth-subtitle">Est. 1952 &nbsp;·&nbsp; 4 shots</div>
+    <button class="big-btn" id="start-btn">Insert Coin</button>
+    <div class="film-strip-deco">
+      <div class="film-hole"></div><div class="film-segment"></div>
+      <div class="film-hole"></div><div class="film-segment"></div>
+      <div class="film-hole"></div><div class="film-segment"></div>
+      <div class="film-hole"></div>
+    </div>
+  </div>
+
+  <!-- CAMERA -->
+  <div class="screen" id="camera">
+    <div id="camera-wrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <div id="camera-overlay"></div>
+      <div id="camera-vignette"></div>
+      <div id="flash-overlay"></div>
+      <div id="photo-strip-preview">
+        <div class="mini-photo" id="mini-0"></div>
+        <div class="mini-photo" id="mini-1"></div>
+        <div class="mini-photo" id="mini-2"></div>
+        <div class="mini-photo" id="mini-3"></div>
+      </div>
+      <div id="hud">
+        <div id="photo-dots">
+          <div class="dot" id="dot-0"></div>
+          <div class="dot" id="dot-1"></div>
+          <div class="dot" id="dot-2"></div>
+          <div class="dot" id="dot-3"></div>
+        </div>
+        <div id="countdown-display"></div>
+        <div id="status-text">Get ready</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REVIEW -->
+  <div class="screen" id="review">
+    <div class="review-title">Choose your favourite</div>
+    <div id="photo-grid"></div>
+    <div class="review-actions">
+      <button class="action-btn btn-discard" id="discard-btn">Discard All</button>
+      <button class="action-btn btn-print" id="print-btn" disabled>Print Photo</button>
+    </div>
+  </div>
+
+  <!-- PRINTING -->
+  <div class="screen" id="printing">
+    <div class="printing-frame" id="print-frame">
+      <img id="print-img" src="" alt="Your photo">
+      <div class="printing-caption">PHOTO BOOTH</div>
+    </div>
+    <div class="printing-msg" id="printing-msg">Printing...</div>
+    <button class="done-btn" id="done-btn" style="display:none">Take Another</button>
+  </div>
+</div>
+
+<canvas id="capture-canvas"></canvas>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const screens = { welcome: $('welcome'), camera: $('camera'), review: $('review'), printing: $('printing') };
+
+  function show(name) {
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[name].classList.add('active');
+  }
+
+  let stream = null;
+  let photos = [];
+  let selectedPhoto = null;
+
+  $('start-btn').addEventListener('click', startBooth);
+  $('discard-btn').addEventListener('click', () => { photos = []; selectedPhoto = null; show('welcome'); });
+  $('print-btn').addEventListener('click', printPhoto);
+  $('done-btn').addEventListener('click', () => { photos = []; selectedPhoto = null; show('welcome'); });
+
+  async function startBooth() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      $('video').srcObject = stream;
+      await $('video').play();
+      photos = [];
+      selectedPhoto = null;
+      resetDots();
+      resetMinis();
+      show('camera');
+      setTimeout(() => runSequence(), 1000);
+    } catch(e) {
+      alert('Camera access is needed for the photo booth.\n\nPlease allow camera access in Safari Settings and try again.');
+    }
+  }
+
+  function resetDots() {
+    for(let i = 0; i < 4; i++) {
+      const d = $(`dot-${i}`);
+      d.className = 'dot';
+      if(i === 0) d.classList.add('next');
+    }
+  }
+
+  function resetMinis() {
+    for(let i = 0; i < 4; i++) {
+      const m = $(`mini-${i}`);
+      m.className = 'mini-photo';
+      m.innerHTML = '';
+    }
+  }
+
+  async function runSequence() {
+    for(let shot = 0; shot < 4; shot++) {
+      $('status-text').textContent = shot === 0 ? 'Get ready!' : 'Next shot!';
+      for(let i = 5; i >= 1; i--) {
+        $('countdown-display').textContent = i;
+        await wait(1000);
+      }
+      $('countdown-display').textContent = '';
+      $('status-text').textContent = 'Smile!';
+      await snap(shot);
+      await wait(400);
+      if(shot < 3) {
+        updateDot(shot, shot + 1);
+        $('status-text').textContent = `${3 - shot} more to go`;
+      }
+    }
+    await wait(600);
+    if(stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    showReview();
+  }
+
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function snap(idx) {
+    const flash = $('flash-overlay');
+    flash.style.opacity = '1';
+    setTimeout(() => { flash.style.opacity = '0'; }, 120);
+
+    const video = $('video');
+    const canvas = $('capture-canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    photos.push(dataUrl);
+
+    const mini = $(`mini-${idx}`);
+    mini.classList.add('taken');
+    mini.innerHTML = `<img src="${dataUrl}" alt="shot ${idx + 1}">`;
+
+    const dot = $(`dot-${idx}`);
+    dot.classList.remove('next');
+    dot.classList.add('taken');
+  }
+
+  function updateDot(justTaken, nextIdx) {
+    for(let i = 0; i <= nextIdx; i++) {
+      const d = $(`dot-${i}`);
+      d.className = 'dot';
+      if(i < nextIdx) d.classList.add('taken');
+      else d.classList.add('next');
+    }
+  }
+
+  function showReview() {
+    const grid = $('photo-grid');
+    grid.innerHTML = '';
+    selectedPhoto = null;
+    $('print-btn').disabled = true;
+
+    photos.forEach((url, i) => {
+      const card = document.createElement('div');
+      card.className = 'photo-card';
+      card.innerHTML = `
+        <img src="${url}" alt="Photo ${i + 1}">
+        <div class="grain"></div>
+        <span class="photo-number">#${i + 1}</span>
+        <span class="select-badge">Select</span>
+      `;
+      card.addEventListener('click', () => selectPhoto(i, card));
+      grid.appendChild(card);
+    });
+
+    show('review');
+  }
+
+  function selectPhoto(idx, card) {
+    document.querySelectorAll('.photo-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedPhoto = idx;
+    $('print-btn').disabled = false;
+  }
+
+  function printPhoto() {
+    if(selectedPhoto === null) return;
+    const url = photos[selectedPhoto];
+    $('print-img').src = url;
+    show('printing');
+
+    const printWin = window.open('', '_blank');
+    if(printWin) {
+      const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      printWin.document.write(`<!DOCTYPE html>
+<html><head><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .pf { background: #f5e6c8; padding: 16px 16px 56px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); width: 320px; }
+  img { display: block; width: 100%; }
+  p { font-family: Georgia, serif; font-size: 11px; color: #5a3a1a; text-align: center; padding-top: 10px; letter-spacing: 0.2em; text-transform: uppercase; }
+  @media print { body { margin: 0; } @page { margin: 1cm; } }
+</style></head><body>
+  <div class="pf">
+    <img src="${url}">
+    <p>Photo Booth &nbsp;·&nbsp; ${date}</p>
+  </div>
+  <script>window.onload = () => { setTimeout(() => { window.print(); window.close(); }, 400); }<\/script>
+</body></html>`);
+      printWin.document.close();
+    }
+
+    $('printing-msg').textContent = 'Printing...';
+    setTimeout(() => {
+      $('printing-msg').textContent = 'Done!';
+      $('done-btn').style.display = 'block';
+    }, 3000);
+  }
+</script>
+</body>
+</html>
